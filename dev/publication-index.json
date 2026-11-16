@@ -2,7 +2,7 @@
   "title": "RYTV-esimerkkijulkaisu",
   "language": "fi",
   "domain": "example",
-  "version": "0.1.0",
+  "version": "dev-9537aaf",
   "diagrams": [
     "overview.png"
   ],
