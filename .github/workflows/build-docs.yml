@@ -1,0 +1,23 @@
+name: Build publication
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the publication
+        uses: actions/checkout@v4
+
+      - name: Build with the pinned engine image
+        run: docker run --rm -v ${{ github.workspace }}:/publication ghcr.io/mvesanen/rytv-builder:0.1.0
+
+      - name: Upload the publication artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication
+          path: artefact/
