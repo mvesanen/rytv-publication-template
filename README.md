@@ -2,7 +2,7 @@
 
 Pohja yhdelle RYTV-julkaisulle. Uusi hanke syntyy GitHubissa tästä reposta, kun asetuksista on laitettu päälle Template repository.
 
-Moottori ei ole tässä repossa. Workflow ajaa kuvan `ghcr.io/mvesanen/rytv-builder:0.1.2`. Kuva pitää olla julkaistu ennen kuin tämä workflow onnistuu.
+Moottori ei ole tässä repossa. Workflow ajaa kuvan `ghcr.io/mvesanen/rytv-builder:0.1.3`. Kuva pitää olla julkaistu ennen kuin tämä workflow onnistuu.
 
 ## Kansiot
 
@@ -30,4 +30,11 @@ Tulokset ovat kansiossa `artefact/`: PDF, `html/index.html`, `machine-readable/`
 
 ## Julkaisu
 
-Push ja pull request jättävät paketin Actions-artefaktiksi. Ne eivät päivitä julkista sivua. GitHub Release ja GitHub Pages, mukaan lukien aiempien versioiden säilytys, tulevat samaan workflowhun kun moottorin kuva on rekisterissä.
+Push `main`-haaraan ja pull request jättävät paketin Actions-artefaktiksi. Ne eivät päivitä julkista sivua.
+
+GitHub Pages on yksi sivusto:
+
+- GitHub Release lisää version polkuun `versions/<tag>/`. Aiemmat versiot jäävät paikalleen, ja juuren luettelo näyttää uusimman ensin.
+- `dev`-haara korvaa vain polun `dev/`. Muut haarat eivät saa omaa sivua: yksi sivusto täyttyisi vanhoista haaroista, eikä poistettu haara siivoaisi itseään.
+
+Sivu on osoitteessa `https://<omistaja>.github.io/<repo>/`.
