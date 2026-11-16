@@ -2,7 +2,7 @@
 
 Pohja yhdelle RYTV-julkaisulle. Uusi hanke syntyy GitHubissa tästä reposta, kun asetuksista on laitettu päälle Template repository.
 
-Moottori ei ole tässä repossa. Workflow ajaa kuvan `ghcr.io/mvesanen/rytv-builder:0.1.0`. Kuva pitää olla julkaistu ennen kuin tämä workflow onnistuu.
+Moottori ei ole tässä repossa. Workflow ajaa kuvan `ghcr.io/mvesanen/rytv-builder:0.1.1`. Kuva pitää olla julkaistu ennen kuin tämä workflow onnistuu.
 
 ## Kansiot
 
