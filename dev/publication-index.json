@@ -1,0 +1,10 @@
+{
+  "title": "RYTV-esimerkkijulkaisu",
+  "language": "fi",
+  "domain": "example",
+  "version": "0.1.0",
+  "diagrams": [
+    "overview.png"
+  ],
+  "machineReadable": []
+}
