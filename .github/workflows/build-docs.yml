@@ -20,8 +20,22 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || github.sha }}
 
+      - name: Resolve the publication version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${GITHUB_REF_NAME}"
+            if [[ "$tag" == v[0-9]* ]]; then
+              tag="${tag#v}"
+            fi
+            echo "value=${tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build with the pinned engine image
-        run: docker run --rm -v ${{ github.workspace }}:/publication ghcr.io/mvesanen/rytv-builder:0.1.4
+        run: docker run --rm -e RYTV_VERSION="${{ steps.version.outputs.value }}" -v ${{ github.workspace }}:/publication ghcr.io/mvesanen/rytv-builder:0.1.5
 
       - name: Upload the publication artefact
         uses: actions/upload-artifact@v4
