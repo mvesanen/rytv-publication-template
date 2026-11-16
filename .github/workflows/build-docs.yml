@@ -71,7 +71,7 @@ jobs:
             python publication/.github/scripts/update_pages.py site artefact --release "${GITHUB_REF_NAME}"
             message="Publish version ${GITHUB_REF_NAME}"
           else
-            python publication/.github/scripts/update_pages.py site artefact --dev
+            python publication/.github/scripts/update_pages.py site artefact --dev --source publication --repository "${GITHUB_REPOSITORY}"
             message="Publish the dev preview"
           fi
           git -C site add -A

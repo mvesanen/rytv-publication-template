@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -21,9 +23,12 @@ def main(argv: list[str] | None = None) -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--dev", action="store_true")
     group.add_argument("--release", metavar="TAG")
+    parser.add_argument("--source", type=Path, help="Git checkout whose latest commit is shown on the dev preview")
+    parser.add_argument("--repository", help="GitHub owner/name used to link the commit")
     args = parser.parse_args(argv)
     target = "dev" if args.dev else version_folder(args.release)
-    publish(args.site, args.artefact, target)
+    revision = read_commit(args.source, args.repository) if args.dev and args.source else None
+    publish(args.site, args.artefact, target, revision)
 
 
 def version_folder(tag: str) -> str:
@@ -33,7 +38,7 @@ def version_folder(tag: str) -> str:
     return name
 
 
-def publish(site: Path, artefact: Path, target: str) -> None:
+def publish(site: Path, artefact: Path, target: str, revision: dict | None = None) -> None:
     if not artefact.is_dir():
         raise SystemExit(f"missing artefact {artefact}")
     destination = site / "dev" if target == "dev" else site / "versions" / target
@@ -41,9 +46,72 @@ def publish(site: Path, artefact: Path, target: str) -> None:
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(artefact, destination)
+    if target == "dev" and revision is not None:
+        (destination / "revision.json").write_text(
+            json.dumps(revision, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        html_path = destination / "html" / "index.html"
+        if html_path.is_file():
+            stamp_dev_html(html_path, revision)
     (site / ".nojekyll").write_text("", encoding="utf-8")
     (site / "index.html").write_text(catalog(site), encoding="utf-8")
     print(f"pages target {destination.relative_to(site).as_posix()}")
+
+
+def read_commit(source: Path, repository: str | None) -> dict:
+    result = subprocess.run(
+        ["git", "-C", str(source), "log", "-1", "--format=%H%n%ai%n%s"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise SystemExit(f"could not read the latest commit in {source}: {detail}")
+    commit_hash, commit_time, message = (result.stdout.splitlines() + ["", "", ""])[:3]
+    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", commit_hash):
+        raise SystemExit(f"unexpected commit hash: {commit_hash}")
+    revision = {
+        "hash": commit_hash,
+        "short": commit_hash[:7],
+        "time": display_time(commit_time),
+        "message": message or "(ei kommenttia)",
+    }
+    if repository and re.fullmatch(r"[\w.-]+/[\w.-]+", repository):
+        revision["url"] = f"https://github.com/{repository}/commit/{commit_hash}"
+    return revision
+
+
+def display_time(raw: str) -> str:
+    parts = raw.split()
+    if len(parts) >= 2 and parts[1].count(":") == 2:
+        minute = parts[1].rsplit(":", 1)[0]
+        zone = " ".join(parts[2:])
+        return f"{parts[0]} {minute}" + (f" {zone}" if zone else "")
+    return raw
+
+
+def stamp_dev_html(html_path: Path, revision: dict) -> None:
+    note = f'<p class="rytv-revision">{revision_text(revision)}</p>\n'
+    text = html_path.read_text(encoding="utf-8")
+    match = re.search(r"<body[^>]*>", text)
+    if match is None:
+        html_path.write_text(note + text, encoding="utf-8")
+        return
+    insert_at = match.end()
+    html_path.write_text(text[:insert_at] + "\n" + note + text[insert_at:], encoding="utf-8")
+
+
+def revision_text(revision: dict) -> str:
+    short = html.escape(str(revision.get("short", "")))
+    when = html.escape(str(revision.get("time", "")))
+    message = html.escape(str(revision.get("message", "")))
+    hash_html = f"<code>{short}</code>"
+    url = str(revision.get("url", ""))
+    if url.startswith("https://github.com/") and " " not in url:
+        hash_html = f'<a href="{html.escape(url, quote=True)}">{hash_html}</a>'
+    return f"{hash_html} · {when} · {message}"
 
 
 def catalog(site: Path) -> str:
@@ -68,6 +136,7 @@ def catalog(site: Path) -> str:
         "  <style>\n"
         "    body { font-family: sans-serif; line-height: 1.5; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }\n"
         "    a { color: #0b3a66; }\n"
+        "    code { font-family: ui-monospace, monospace; }\n"
         "  </style>\n"
         "</head>\n"
         "<body>\n"
@@ -103,7 +172,7 @@ def version_list(site: Path, versions: list[str]) -> str:
 def dev_section(site: Path) -> str:
     publication = site / "dev"
     if (publication / "html" / "index.html").is_file():
-        body = f"  <p>{links('dev', publication)}</p>\n"
+        body = f"  <p>{links('dev', publication)}</p>\n{revision_note(publication)}"
     else:
         body = "  <p>dev-haaraa ei ole vielä julkaistu.</p>\n"
     return "  <h2>Kehitysversio</h2>\n" + body
@@ -122,6 +191,17 @@ def links(name: str, publication: Path) -> str:
             f'<a href="{prefix}/machine-readable/{html.escape(relative, quote=True)}">{html.escape(filename)}</a>'
         )
     return " · ".join(parts)
+
+
+def revision_note(publication: Path) -> str:
+    path = publication / "revision.json"
+    if not path.is_file():
+        return ""
+    try:
+        revision = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return ""
+    return f"  <p>{revision_text(revision)}</p>\n"
 
 
 def machine_files(publication: Path) -> list[str]:

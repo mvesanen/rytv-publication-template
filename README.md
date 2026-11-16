@@ -35,6 +35,6 @@ Push `main`-haaraan ja pull request jättävät paketin Actions-artefaktiksi. Ne
 GitHub Pages on yksi sivusto:
 
 - GitHub Release lisää version polkuun `versions/<tag>/`. Aiemmat versiot jäävät paikalleen, ja juuren luettelo näyttää uusimman ensin.
-- `dev`-haara korvaa vain polun `dev/`. Muut haarat eivät saa omaa sivua: yksi sivusto täyttyisi vanhoista haaroista, eikä poistettu haara siivoaisi itseään.
+- `dev`-haara korvaa vain polun `dev/`. Sivu näyttää sen commitin viestin, ajan ja hashin. Muut haarat eivät saa omaa sivua: yksi sivusto täyttyisi vanhoista haaroista, eikä poistettu haara siivoaisi itseään.
 
 Sivu on osoitteessa `https://<omistaja>.github.io/<repo>/`.
