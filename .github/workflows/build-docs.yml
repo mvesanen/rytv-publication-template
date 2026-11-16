@@ -35,11 +35,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: github-pages
       cancel-in-progress: false
@@ -55,17 +50,6 @@ jobs:
         with:
           name: publication
           path: artefact
-
-      - name: Use Actions to serve Pages
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
-          fi
 
       - name: Fetch the Pages archive
         run: |
@@ -97,15 +81,3 @@ jobs:
             git -C site commit -m "$message"
             git -C site push origin HEAD:gh-pages
           fi
-
-      - name: Copy the site without git metadata
-        run: rsync -a --exclude .git site/ public/
-
-      - name: Upload the Pages site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
