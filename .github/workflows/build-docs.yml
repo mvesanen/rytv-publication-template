@@ -79,10 +79,12 @@ jobs:
           git -C site config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Update the Pages tree
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "release" ]; then
-            python publication/.github/scripts/update_pages.py site artefact --release "${GITHUB_REF_NAME}"
+            python publication/.github/scripts/update_pages.py site artefact --release "${GITHUB_REF_NAME}" --repository "${GITHUB_REPOSITORY}"
             message="Publish version ${GITHUB_REF_NAME}"
           else
             python publication/.github/scripts/update_pages.py site artefact --dev --source publication --repository "${GITHUB_REPOSITORY}"

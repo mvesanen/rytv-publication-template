@@ -10,9 +10,11 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
+import urllib.request
 from pathlib import Path
 
 
@@ -28,7 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     target = "dev" if args.dev else version_folder(args.release)
     revision = read_commit(args.source, args.repository) if args.dev and args.source else None
-    publish(args.site, args.artefact, target, revision)
+    publish(args.site, args.artefact, target, revision, args.repository)
 
 
 def version_folder(tag: str) -> str:
@@ -38,7 +40,13 @@ def version_folder(tag: str) -> str:
     return name
 
 
-def publish(site: Path, artefact: Path, target: str, revision: dict | None = None) -> None:
+def publish(
+    site: Path,
+    artefact: Path,
+    target: str,
+    revision: dict | None = None,
+    repository: str | None = None,
+) -> None:
     if not artefact.is_dir():
         raise SystemExit(f"missing artefact {artefact}")
     destination = site / "dev" if target == "dev" else site / "versions" / target
@@ -55,7 +63,9 @@ def publish(site: Path, artefact: Path, target: str, revision: dict | None = Non
         if html_path.is_file():
             stamp_dev_html(html_path, revision)
     (site / ".nojekyll").write_text("", encoding="utf-8")
-    (site / "index.html").write_text(catalog(site), encoding="utf-8")
+    notes = github_release_notes(repository)
+    store_release_notes(site, notes)
+    (site / "index.html").write_text(catalog(site, notes), encoding="utf-8")
     print(f"pages target {destination.relative_to(site).as_posix()}")
 
 
@@ -114,7 +124,70 @@ def revision_text(revision: dict) -> str:
     return f"{hash_html} · {when} · {message}"
 
 
-def catalog(site: Path) -> str:
+def github_release_notes(repository: str | None) -> dict[str, dict]:
+    if not repository or not re.fullmatch(r"[\w.-]+/[\w.-]+", repository):
+        return {}
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "rytv-builder"}
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = f"https://api.github.com/repos/{repository}/releases?per_page=100"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=20) as response:
+            releases = json.loads(response.read().decode())
+    except Exception as error:
+        print(f"warning: could not read GitHub releases: {error}")
+        return {}
+    notes = {}
+    for release in releases:
+        tag = str(release.get("tag_name") or "")
+        try:
+            folder = version_folder(tag)
+        except SystemExit:
+            continue
+        notes[folder] = {
+            "time": display_iso(str(release.get("published_at") or "")),
+            "title": release_title(release, folder, tag),
+        }
+    return notes
+
+
+def release_title(release: dict, folder: str, tag: str) -> str:
+    body = str(release.get("body") or "").strip()
+    name = str(release.get("name") or "").strip()
+    if body:
+        if name and name not in {folder, tag}:
+            return f"{name}\n{body}"
+        return body
+    if name and name not in {folder, tag}:
+        return name
+    return ""
+
+
+def display_iso(raw: str) -> str:
+    if "T" not in raw:
+        return display_time(raw) if raw else ""
+    date, clock = raw.split("T", 1)
+    zone = "UTC" if clock.endswith("Z") else ""
+    clock = clock.rstrip("Z").split("+", 1)[0]
+    if clock.count(":") == 2:
+        clock = clock.rsplit(":", 1)[0]
+    return f"{date} {clock}" + (f" {zone}" if zone else "")
+
+
+def store_release_notes(site: Path, notes: dict[str, dict]) -> None:
+    for folder, info in notes.items():
+        destination = site / "versions" / folder
+        if not destination.is_dir():
+            continue
+        payload = json.dumps(info, ensure_ascii=False, indent=2) + "\n"
+        target = destination / "release.json"
+        if target.is_file() and target.read_text(encoding="utf-8") == payload:
+            continue
+        target.write_text(payload, encoding="utf-8")
+
+
+def catalog(site: Path, notes: dict[str, dict] | None = None) -> str:
     versions = []
     version_root = site / "versions"
     if version_root.is_dir():
@@ -126,6 +199,7 @@ def catalog(site: Path) -> str:
     if versions:
         title = publication_title(version_root / versions[0]) or title
     title = title or "RYTV-julkaisu"
+    notes = notes or {}
     return (
         "<!DOCTYPE html>\n"
         '<html lang="fi">\n'
@@ -137,36 +211,59 @@ def catalog(site: Path) -> str:
         "    body { font-family: sans-serif; line-height: 1.5; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }\n"
         "    a { color: #0b3a66; }\n"
         "    code { font-family: ui-monospace, monospace; }\n"
+        "    .release-note { margin: 0.2rem 0 0.8rem; }\n"
         "  </style>\n"
         "</head>\n"
         "<body>\n"
         f"  <h1>{html.escape(title)}</h1>\n"
         "  <p>Jokainen GitHub Release jää omalle polulleen. Juuri on luettelo, uusin ensin.</p>\n"
-        f"{latest_section(site, versions)}\n"
-        f"{version_list(site, versions)}\n"
+        f"{latest_section(site, versions, notes)}\n"
+        f"{version_list(site, versions, notes)}\n"
         f"{dev_section(site)}\n"
         "</body>\n"
         "</html>\n"
     )
 
 
-def latest_section(site: Path, versions: list[str]) -> str:
+def latest_section(site: Path, versions: list[str], notes: dict[str, dict]) -> str:
     if not versions:
         return "  <h2>Uusin julkaisu</h2>\n  <p>Ei vielä julkaistuja versioita.</p>\n"
     name = versions[0]
     return (
         "  <h2>Uusin julkaisu</h2>\n"
-        f"  <p>{links(name, site / 'versions' / name)}</p>\n"
+        f"{version_entry(site, name, notes)}"
     )
 
 
-def version_list(site: Path, versions: list[str]) -> str:
+def version_list(site: Path, versions: list[str], notes: dict[str, dict]) -> str:
     if not versions:
         return ""
     items = "\n".join(
-        f"    <li>{links(name, site / 'versions' / name)}</li>" for name in versions
+        f"    <li>\n{version_entry(site, name, notes)}    </li>" for name in versions
     )
     return f"  <h2>Kaikki versiot</h2>\n  <ul>\n{items}\n  </ul>\n"
+
+
+def version_entry(site: Path, name: str, notes: dict[str, dict]) -> str:
+    publication = site / "versions" / name
+    return f"  <p>{links(name, publication)}</p>\n{release_note(publication, notes.get(name))}"
+
+
+def release_note(publication: Path, info: dict | None) -> str:
+    if not info:
+        path = publication / "release.json"
+        if not path.is_file():
+            return ""
+        try:
+            info = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return ""
+    when = html.escape(str(info.get("time") or ""))
+    title = html.escape(str(info.get("title") or "")).replace("\n", "<br>")
+    parts = [part for part in (when, title) if part]
+    if not parts:
+        return ""
+    return f'  <p class="release-note">{"<br>".join(parts)}</p>\n'
 
 
 def dev_section(site: Path) -> str:
