@@ -1,7 +1,7 @@
 {
-  "hash": "9537aaf0239d259c46240f56fc0df74ce5ceffe5",
-  "short": "9537aaf",
-  "time": "2026-11-16 12:27 +0200",
-  "message": "Pass the release tag or dev commit hash into the build.",
-  "url": "https://github.com/mvesanen/rytv-publication-template/commit/9537aaf0239d259c46240f56fc0df74ce5ceffe5"
+  "hash": "bcfe0375f6f6277e35570f69616987c75de28698",
+  "short": "bcfe037",
+  "time": "2026-11-16 13:54 +0200",
+  "message": "Show each release time and title on the Pages catalog.",
+  "url": "https://github.com/mvesanen/rytv-publication-template/commit/bcfe0375f6f6277e35570f69616987c75de28698"
 }
